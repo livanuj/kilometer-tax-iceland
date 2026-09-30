@@ -18,7 +18,11 @@ export async function readInput(): Promise<Input | null> {
   try {
     const v = JSON.parse(raw) as Input;
     if (typeof v.prevDate !== "string" || typeof v.rate !== "number" || typeof v.bills !== "object") return null;
-    return { ...v, settlement: typeof v.settlement === "number" ? v.settlement : null };
+    return {
+      ...v,
+      settlement: typeof v.settlement === "number" ? v.settlement : null,
+      govLines: v.govLines && typeof v.govLines === "object" ? v.govLines : {}, // added later; old cookies lack it
+    };
   } catch {
     return null;
   }

@@ -13,15 +13,15 @@ export async function saveInputs(_prev: FormState, fd: FormData): Promise<FormSt
   const error = validate(input);
   if (error) return { error };
   await writeInput(input);
-  redirect("/");
+  redirect("/result");
 }
 
 export async function loadSample() {
   await writeInput(SAMPLE);
-  redirect("/");
+  redirect("/result");
 }
 
 export async function startOver() {
   await clearInput();
-  redirect("/");
+  redirect("/edit");
 }
