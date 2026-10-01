@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { startOver } from "@/app/actions.ts";
 
 /**
@@ -10,6 +11,7 @@ import { startOver } from "@/app/actions.ts";
  * `onConfirm` runs just before, e.g. to clear what's typed but not saved.
  */
 export default function StartOver({ standalone = false, onConfirm }: { standalone?: boolean; onConfirm?: () => void }) {
+  const t = useTranslations("startOver");
   const dialog = useRef<HTMLDialogElement>(null);
   const id = useId();
   const confirm = async () => {
@@ -20,13 +22,13 @@ export default function StartOver({ standalone = false, onConfirm }: { standalon
 
   const body = (
     <>
-      <button type="button" className="ghost" onClick={() => dialog.current?.showModal()}>Start over</button>
+      <button type="button" className="ghost" onClick={() => dialog.current?.showModal()}>{t("button")}</button>
       <dialog ref={dialog} className="confirm" aria-labelledby={`${id}-t`} aria-describedby={`${id}-d`}>
-        <h2 id={`${id}-t`}>Start over?</h2>
-        <p id={`${id}-d`}>This removes your readings, rate and bills from this device. You can&apos;t undo it.</p>
+        <h2 id={`${id}-t`}>{t("title")}</h2>
+        <p id={`${id}-d`}>{t("body")}</p>
         <div className="confirm-actions">
-          <button type="button" className="ghost" autoFocus onClick={() => dialog.current?.close()}>Cancel</button>
-          <button type="submit" className="danger" formAction={confirm} formNoValidate>Start over</button>
+          <button type="button" className="ghost" autoFocus onClick={() => dialog.current?.close()}>{t("cancel")}</button>
+          <button type="submit" className="danger" formAction={confirm} formNoValidate>{t("confirm")}</button>
         </div>
       </dialog>
     </>

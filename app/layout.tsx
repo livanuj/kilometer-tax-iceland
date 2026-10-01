@@ -1,14 +1,18 @@
 import type { Metadata } from "next";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getTranslations } from "next-intl/server";
+import LanguageSwitcher from "@/components/LanguageSwitcher.tsx";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "Kilometer tax, explained",
-  description: "See how your Icelandic kilometer tax (kílómetragjald) estimates, extra bills and refunds add up.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("meta");
+  return { title: t("title"), description: t("description") };
+}
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale();
   return (
-    <html lang="en">
+    <html lang={locale}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
@@ -18,7 +22,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <main className="page">{children}</main>
+        <NextIntlClientProvider>
+          <main className="page">
+            <LanguageSwitcher />
+            {children}
+          </main>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

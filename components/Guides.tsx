@@ -1,49 +1,42 @@
+"use client";
+
 // Short "where do I find this" guides for the form, based on island.is/en/kilometer-fee
-// and skatturinn.is/kilometragjald. Menu names are given in Icelandic too, as they appear on Ísland.is.
+// and skatturinn.is/kilometragjald. Menu names are also given in Icelandic, as they appear on Ísland.is.
 
 import type { ReactNode } from "react";
+import { useTranslations } from "next-intl";
 
 const MY_VEHICLES = "https://island.is/minarsidur/eignir/okutaeki/min-okutaeki";
 const REGISTER = "https://island.is/minarsidur/eignir/okutaeki/skra-kilometrastodu";
 const MAILBOX = "https://island.is/minarsidur/postholf";
 
-const Ext = ({ href, children }: { href: string; children: ReactNode }) => (
-  <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
-);
+const ext = (href: string) => (chunks: ReactNode) => <a href={href} target="_blank" rel="noopener noreferrer">{chunks}</a>;
+const is = (chunks: ReactNode) => <span lang="is" className="is">{chunks}</span>;
+const b = (chunks: ReactNode) => <strong>{chunks}</strong>;
 
 export function ReadingsGuide() {
+  const t = useTranslations("guides");
   return (
     <details className="howto">
-      <summary>How to find your readings on Ísland.is</summary>
+      <summary>{t("readingsTitle")}</summary>
       <ol>
-        <li>
-          Log in to <Ext href={MY_VEHICLES}>My vehicles on Ísland.is</Ext> (<span lang="is" className="is">Mínar síður → Eignir → Ökutæki</span>).
-        </li>
-        <li>Open your vehicle. Its odometer history (<span lang="is" className="is">kílómetrastaða</span>) lists every reading with its date and km.</li>
-        <li>
-          Enter the two latest readings you registered. Readings taken at repair shops, for insurance claims or in police
-          checks don&apos;t count toward your average, so skip those.
-        </li>
+        <li>{t.rich("readings1", { link: ext(MY_VEHICLES), is })}</li>
+        <li>{t.rich("readings2", { is })}</li>
+        <li>{t("readings3")}</li>
       </ol>
-      <p className="help">
-        <strong>No new reading yet?</strong> Register one at <Ext href={REGISTER}>Register odometer reading</Ext>
-        {" "}(<span lang="is" className="is">Skrá kílómetrastöðu</span>) or in the Ísland.is app. Enter the km shown on your dashboard. You can
-        register once every 30 days; a wrong entry can be fixed the same day, until midnight.
-      </p>
+      <p className="help">{t.rich("register", { link: ext(REGISTER), is, b })}</p>
     </details>
   );
 }
 
 export function BillsGuide() {
+  const t = useTranslations("guides");
   return (
     <details className="howto">
-      <summary>Where to find your monthly bills</summary>
+      <summary>{t("billsTitle")}</summary>
       <ul>
-        <li>The payment slip (<span lang="is" className="is">greiðsluseðill</span>) for each month is in your online bank.</li>
-        <li>
-          The statement is also in your <Ext href={MAILBOX}>Ísland.is mailbox</Ext> (<span lang="is" className="is">Pósthólf</span>).
-          If you own more than one vehicle, one statement covers them all; use the amount for this vehicle.
-        </li>
+        <li>{t.rich("bills1", { is })}</li>
+        <li>{t.rich("bills2", { link: ext(MAILBOX), is })}</li>
       </ul>
     </details>
   );

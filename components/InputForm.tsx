@@ -1,24 +1,22 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { loadSample, saveInputs, type FormState } from "@/app/actions.ts";
 import DateField from "@/components/DateField.tsx";
 import { BillsGuide, ReadingsGuide } from "@/components/Guides.tsx";
 import StartOver from "@/components/StartOver.tsx";
+import { errorText, warningText } from "@/components/wording.ts";
 import { checkBills } from "@/lib/calc.ts";
-import { formatDate, isIsoDate, monthSlices, type MonthSlice } from "@/lib/dates.ts";
+import { dayOfMonth, formatDate, isIsoDate, monthSlices } from "@/lib/dates.ts";
+import { kr as krFmt } from "@/lib/format.ts";
 import { parseDecimal, parseRate, parseWhole } from "@/lib/parse.ts";
 import { RATE_PRESETS, presetForRate } from "@/lib/rates.ts";
-import type { Input } from "@/lib/types.ts";
-
-// The bill for a month is paid near its end, which is how people find it on their statement.
-const paidHint = (s: MonthSlice) => `Bill paid around ${s.label.split(" ")[0]} ${Math.min(29, s.daysInMonth)}`;
-
-const krFmt = (n: number) => `${n < 0 ? "−" : ""}${Math.abs(n).toLocaleString("de-DE")} kr`;
+import type { Input, ValidationError } from "@/lib/types.ts";
 
 const fmt = (n: number | undefined | null) => (n === undefined || n === null || !Number.isFinite(n) ? "" : String(n));
 
-type Props = { initial: Input | null; initialError: string | null };
+type Props = { initial: Input | null; initialError: ValidationError | null };
 
 // "Start over" remounts the form with a new key, so typed-but-unsaved values and old errors go too.
 export default function InputForm({ initial, initialError }: Props) {
@@ -30,6 +28,14 @@ export default function InputForm({ initial, initialError }: Props) {
 
 function Form({ initial, initialError, onReset }: Props & { onReset: () => void }) {
   const [state, action, pending] = useActionState<FormState, FormData>(saveInputs, { error: initialError });
+  const locale = useLocale();
+  const t = useTranslations("form");
+  const tc = useTranslations("common");
+  const tr = useTranslations("rates");
+  const tw = useTranslations("warnings");
+  const te = useTranslations("errors");
+  // The bill for a month is paid near its end, which is how people find it on their statement.
+  const paidHint = (s: { key: string; daysInMonth: number }) => t("paidAround", { date: dayOfMonth(s.key, Math.min(29, s.daysInMonth), locale) });
 
   const [prevDate, setPrevDate] = useState(initial?.prevDate ?? "");
   const [prevKm, setPrevKm] = useState(fmt(initial?.prevKm));
@@ -45,7 +51,7 @@ function Form({ initial, initialError, onReset }: Props & { onReset: () => void 
     Object.fromEntries(Object.entries(initial?.govLines ?? {}).map(([k, v]) => [k, String(v).replace(".", ",")])),
   );
 
-  const slices = useMemo(() => monthSlices(prevDate, currDate), [prevDate, currDate]);
+  const slices = useMemo(() => monthSlices(prevDate, currDate, locale), [prevDate, currDate, locale]);
   const settled = slices.filter((s) => !s.isReadingMonth);
   const readingMonth = slices.find((s) => s.isReadingMonth);
   const presetRate = RATE_PRESETS.find((p) => p.id === preset)?.rate;
@@ -98,64 +104,58 @@ function Form({ initial, initialError, onReset }: Props & { onReset: () => void 
   return (
     <form action={action} className="form" noValidate>
       <header className="intro">
-        <h1>Kilometer tax, explained</h1>
-        <p>
-          Enter two odometer readings you registered on Ísland.is and the bills you paid in between.
-          You&apos;ll see what you actually drove, what you were billed for, and where any extra bill or refund comes from.
-        </p>
+        <h1>{tc("brand")}</h1>
+        <p>{t("intro")}</p>
       </header>
 
       <section className="step">
-        <h2><span className="stepno">1</span>Your two readings</h2>
-        <p className="help">Find them on Ísland.is under your vehicle&apos;s odometer history.</p>
+        <h2><span className="stepno">1</span>{t("step1")}</h2>
+        <p className="help">{t("step1Help")}</p>
         <ReadingsGuide />
         <div className="readings">
           <fieldset>
-            <legend>Previous reading</legend>
-            <DateField name="prevDate" label="Date" value={prevDate} onChange={setPrevDate} before={currDate} />
-            <label>Odometer<span className="unit"><input name="prevKm" inputMode="numeric" required placeholder="154.448" value={prevKm} onChange={(e) => setPrevKm(e.target.value)} /><span>km</span></span></label>
+            <legend>{t("previous")}</legend>
+            <DateField name="prevDate" label={t("date")} value={prevDate} onChange={setPrevDate} before={currDate} />
+            <label>{t("odometer")}<span className="unit"><input name="prevKm" inputMode="numeric" required placeholder="154.448" value={prevKm} onChange={(e) => setPrevKm(e.target.value)} /><span>km</span></span></label>
           </fieldset>
           <fieldset>
-            <legend>Latest reading</legend>
-            <DateField name="currDate" label="Date" value={currDate} onChange={setCurrDate} after={prevDate} />
-            <label>Odometer<span className="unit"><input name="currKm" inputMode="numeric" required placeholder="156.116" value={currKm} onChange={(e) => setCurrKm(e.target.value)} /><span>km</span></span></label>
+            <legend>{t("latest")}</legend>
+            <DateField name="currDate" label={t("date")} value={currDate} onChange={setCurrDate} after={prevDate} />
+            <label>{t("odometer")}<span className="unit"><input name="currKm" inputMode="numeric" required placeholder="156.116" value={currKm} onChange={(e) => setCurrKm(e.target.value)} /><span>km</span></span></label>
           </fieldset>
         </div>
       </section>
 
       <section className="step">
-        <h2><span className="stepno">2</span>Your rate</h2>
-        <div className="presets" role="radiogroup" aria-label="Vehicle type">
+        <h2><span className="stepno">2</span>{t("step2")}</h2>
+        <div className="presets" role="radiogroup" aria-label={tr("vehicleType")}>
           {RATE_PRESETS.map((p) => (
             <label key={p.id} className={`preset ${preset === p.id ? "on" : ""}`}>
               <input type="radio" name="ratePreset" value={p.id} checked={preset === p.id} onChange={() => setPreset(p.id)} />
-              <strong>{p.rate != null ? `${String(p.rate).replace(".", ",")} kr/km` : "Enter rate"}</strong>
-              <span>{p.label}</span>
+              <strong>{p.rate != null ? `${String(p.rate).replace(".", ",")} kr/km` : tr("enter")}</strong>
+              <span>{tr(p.id)}</span>
             </label>
           ))}
         </div>
         {preset === "custom" && (
           <label className="custom">
-            Rate from your bill
+            {tr("fromBill")}
             <span className="unit"><input inputMode="decimal" placeholder="6,95" value={customRate} onChange={(e) => setCustomRate(e.target.value)} /><span>kr/km</span></span>
-            <small>{RATE_PRESETS.find((p) => p.id === "custom")?.hint}</small>
+            <small>{tr("customHint")}</small>
           </label>
         )}
         <input type="hidden" name="rate" value={rate} />
       </section>
 
       <section className="step">
-        <h2><span className="stepno">3</span>Bills between the readings</h2>
+        <h2><span className="stepno">3</span>{t("step3")}</h2>
         <BillsGuide />
         {slices.length === 0 ? (
-          <p className="help">Enter both dates and the months to fill in will appear here.</p>
+          <p className="help">{t("noMonths")}</p>
         ) : (
           <>
-            <p className="help">The regular monthly bill for each month. Don&apos;t include extra bills or refunds here.</p>
-            <p className="help">
-              Extra bills or refunds you got shortly after your previous reading belong to the period before this one.
-              Leave them out. Only the one that came after your latest reading goes in step 4.
-            </p>
+            <p className="help">{t("billsHelp")}</p>
+            <p className="help">{t("billsHelpEarlier")}</p>
             <ul className="bills">
               {settled.map((s) => {
                 const w = warnings.find((x) => x.monthKey === s.key);
@@ -163,21 +163,21 @@ function Form({ initial, initialError, onReset }: Props & { onReset: () => void 
                   <li key={s.key}>
                     <div>
                       <strong>{s.label}</strong>
-                      <small>{paidHint(s)} · {s.days === s.daysInMonth ? "whole month in this period" : `${s.days} of ${s.daysInMonth} days in this period`}</small>
+                      <small>{paidHint(s)} · {s.days === s.daysInMonth ? t("wholeMonth") : t("partMonth", { days: s.days, total: s.daysInMonth })}</small>
                     </div>
-                    {billInput(s.key, `Bill for ${s.label}`, true, w ? `warn_${s.key}` : undefined)}
-                    {w && <p className="warn" id={`warn_${s.key}`} role="status">{w.message}</p>}
+                    {billInput(s.key, t("billFor", { month: s.label }), true, w ? `warn_${s.key}` : undefined)}
+                    {w && <p className="warn" id={`warn_${s.key}`} role="status">{warningText(tw, w, locale)}</p>}
                   </li>
                 );
               })}
               {readingMonth && (
                 <li className="optional">
                   <div>
-                    <strong>{readingMonth.label} <em>optional</em></strong>
-                    <small>{paidHint(readingMonth)}. Billed after your latest reading, so it already uses the new rate. Leave empty if it hasn&apos;t arrived.</small>
-                    <small>Enter it if you have it. It makes the calculation closer to the government&apos;s.</small>
+                    <strong>{readingMonth.label} <em>{t("optional")}</em></strong>
+                    <small>{paidHint(readingMonth)}. {t("readingMonthHelp")}</small>
+                    <small>{t("readingMonthWhy")}</small>
                   </div>
-                  {billInput(readingMonth.key, `Bill for ${readingMonth.label}`, false)}
+                  {billInput(readingMonth.key, t("billFor", { month: readingMonth.label }), false)}
                 </li>
               )}
             </ul>
@@ -186,35 +186,32 @@ function Form({ initial, initialError, onReset }: Props & { onReset: () => void 
       </section>
 
       <section className="step">
-        <h2><span className="stepno">4</span>Extra bill or refund <em>optional</em></h2>
-        <p className="help">If you already got one after the latest reading, enter it to check it against the calculation. Use a minus sign for a refund.</p>
+        <h2><span className="stepno">4</span>{t("step4")} <em>{t("optional")}</em></h2>
+        <p className="help">{t("step4Help")}</p>
         <span className="money wide">
           <input name="settlement" inputMode="numeric" placeholder="2.721" value={settlement} onChange={(e) => setSettlement(e.target.value)} />
           <span>kr</span>
         </span>
         <p className="help">
-          This is the extra bill or refund that arrived after your latest reading{isIsoDate(currDate) ? ` (${formatDate(currDate)})` : ""}.
+          {isIsoDate(currDate) ? t("step4WhichDate", { date: formatDate(currDate, locale) }) : t("step4Which")}
         </p>
         {settled.length > 0 && (
           <details className="lines" open={Object.keys(initial?.govLines ?? {}).length > 0}>
-            <summary>Add the month lines from the bill</summary>
-            <p className="help">
-              The extra bill lists each month with its km, for example &ldquo;41,58 km&rdquo;. Enter them to use the
-              government&apos;s exact figures instead of this app&apos;s calculation. Use a minus sign for a refund.
-            </p>
+            <summary>{t("linesSummary")}</summary>
+            <p className="help">{t("linesHelp")}</p>
             <ul className="bills">
               {settled.map((s, i) => (
                 <li key={s.key}>
                   <div>
                     <strong>{s.label}</strong>
-                    <small>{lineKrs[i] !== null ? `${krFmt(lineKrs[i]!)} on the bill` : s.rangeLabel}</small>
+                    <small>{lineKrs[i] !== null ? t("lineOnBill", { amount: krFmt(lineKrs[i]!) }) : s.rangeLabel}</small>
                   </div>
                   <span className="money">
                     <input
                       name={`line_${s.key}`}
                       inputMode="decimal"
                       autoComplete="off"
-                      aria-label={`Km on the extra bill for ${s.label}`}
+                      aria-label={t("lineLabel", { month: s.label })}
                       value={lines[s.key] ?? ""}
                       onChange={(e) => setLines((l) => ({ ...l, [s.key]: e.target.value }))}
                     />
@@ -225,21 +222,20 @@ function Form({ initial, initialError, onReset }: Props & { onReset: () => void 
             </ul>
             {linesTotal !== null && (
               <p className="help">
-                These lines add up to {krFmt(linesTotal)}
                 {Number.isFinite(settlementNum) && settlementNum !== linesTotal
-                  ? `, not the ${krFmt(settlementNum)} you entered above. Check both against the bill.`
-                  : "."}
+                  ? t("linesTotalOff", { total: krFmt(linesTotal), entered: krFmt(settlementNum) })
+                  : t("linesTotal", { total: krFmt(linesTotal) })}
               </p>
             )}
           </details>
         )}
       </section>
 
-      {state.error && <p className="error" role="alert">{state.error}</p>}
+      {state.error && <p className="error" role="alert">{errorText(te, state.error, locale)}</p>}
 
       <div className="actions">
-        <button type="submit" className="primary" disabled={pending}>{pending ? "Calculating…" : "Show breakdown"}</button>
-        <button type="submit" formAction={loadSample} formNoValidate className="ghost">Try with sample data</button>
+        <button type="submit" className="primary" disabled={pending}>{pending ? t("submitting") : t("submit")}</button>
+        <button type="submit" formAction={loadSample} formNoValidate className="ghost">{t("sample")}</button>
         {hasData && <StartOver onConfirm={onReset} />}
       </div>
     </form>

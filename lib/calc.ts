@@ -1,25 +1,22 @@
-import { MONTHS, daysBetween, daysInMonth, isIsoDate, monthSlices } from "./dates.ts";
-import type { BillWarning, Input, MonthResult, NextBill, Result, UpcomingBill } from "./types.ts";
+import { daysBetween, daysInMonth, isIsoDate, monthLabel, monthName, monthShort, monthSlices } from "./dates.ts";
+import type { BillWarning, Input, MonthResult, NextBill, Result, UpcomingBill, ValidationError } from "./types.ts";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
-const dec1 = (n: number) => n.toFixed(1).replace(".", ",");
 
 /** How far a month's billed km/day may drift from the others before it's flagged. */
 export const BILL_TOLERANCE = 0.02;
 
-export function validate(input: Input): string | null {
+export function validate(input: Input): ValidationError | null {
   const { prevDate, currDate, prevKm, currKm, rate } = input;
-  if (!isIsoDate(prevDate) || !isIsoDate(currDate)) return "Enter both reading dates.";
-  if (daysBetween(prevDate, currDate) <= 0) return "The latest reading must be after the previous reading.";
-  if (!Number.isFinite(prevKm) || !Number.isFinite(currKm) || prevKm < 0 || currKm < 0)
-    return "Enter both odometer readings in km.";
-  if (currKm < prevKm) return "The latest odometer reading is lower than the previous one. Check the numbers.";
-  if (!Number.isFinite(rate) || rate <= 0 || rate > 100) return "Enter a rate in kr per km, for example 6,95.";
+  if (!isIsoDate(prevDate) || !isIsoDate(currDate)) return { code: "dates" };
+  if (daysBetween(prevDate, currDate) <= 0) return { code: "order" };
+  if (!Number.isFinite(prevKm) || !Number.isFinite(currKm) || prevKm < 0 || currKm < 0) return { code: "km" };
+  if (currKm < prevKm) return { code: "kmLower" };
+  if (!Number.isFinite(rate) || rate <= 0 || rate > 100) return { code: "rate" };
   for (const s of monthSlices(prevDate, currDate)) {
     if (s.isReadingMonth) continue;
     const bill = input.bills[s.key];
-    if (bill === undefined || !Number.isFinite(bill) || bill < 0)
-      return `Enter the monthly bill for ${s.label}.`;
+    if (bill === undefined || !Number.isFinite(bill) || bill < 0) return { code: "bill", monthKey: s.key };
   }
   return null;
 }
@@ -60,7 +57,7 @@ export function checkBills(input: Input): BillWarning[] {
   const slices = monthSlices(input.prevDate, input.currDate);
   const months = slices
     .filter((s) => !s.isReadingMonth && Number.isFinite(input.bills[s.key]))
-    .map((s) => ({ key: s.key, name: s.label.split(" ")[0], dim: s.daysInMonth, bill: input.bills[s.key], first: s === slices[0] }));
+    .map((s) => ({ key: s.key, dim: s.daysInMonth, bill: input.bills[s.key], first: s === slices[0] }));
   const later = months.map((_, i) => i).filter((i) => !months[i].first);
   if (later.length < 2) return [];
 
@@ -80,9 +77,8 @@ export function checkBills(input: Input): BillWarning[] {
     [bills[i], bills[i + 1]] = [bills[i + 1], bills[i]];
     const after = ref();
     if (!off(i, after) && !off(i + 1, after) && flagged() < before) {
-      const message = `Your ${months[i].name} and ${months[i + 1].name} amounts look swapped or shifted by a month. ` +
-        "The bill paid at the end of a month belongs to that month; 30-day months have the smaller bill.";
-      warnings.push({ monthKey: months[i].key, kind: "shifted", message }, { monthKey: months[i + 1].key, kind: "shifted", message });
+      const pair: [string, string] = [months[i].key, months[i + 1].key];
+      warnings.push({ monthKey: pair[0], kind: "shifted", pair }, { monthKey: pair[1], kind: "shifted", pair });
       swapped.add(i).add(i + 1);
       i++;
     } else {
@@ -95,10 +91,8 @@ export function checkBills(input: Input): BillWarning[] {
     if (swapped.has(i) || !off(i, med)) return;
     if (m.first && m.bill !== input.settlement) return; // may be at the average before the previous reading
     warnings.push(m.bill === input.settlement
-      ? { monthKey: m.key, kind: "settlement",
-          message: `The ${m.name} amount matches your extra bill. Enter the regular monthly bill here and the extra bill in step 4.` }
-      : { monthKey: m.key, kind: "mismatch",
-          message: `${m.name}'s bill works out to ${dec1(perDay(i))} km/day, but your other months work out to ${dec1(med)}. Check that it's the regular monthly bill.` });
+      ? { monthKey: m.key, kind: "settlement" }
+      : { monthKey: m.key, kind: "mismatch", perDay: perDay(i), typical: med });
   });
   const order = months.map((m) => m.key);
   return warnings.sort((a, b) => order.indexOf(a.monthKey) - order.indexOf(b.monthKey));
@@ -108,7 +102,7 @@ export function checkBills(input: Input): BillWarning[] {
  * The reading month's whole bill, compared with what the old estimate would have
  * charged for it. Its first days (e.g. Sep 1–10) belong to this period.
  */
-function nextBill(months: MonthResult[], rate: number, kmPerDay: number): NextBill | null {
+function nextBill(months: MonthResult[], rate: number, kmPerDay: number, locale: string): NextBill | null {
   const settled = months.filter((m) => m.kind === "settled");
   const reading = months.find((m) => m.kind === "new-rate");
   if (!reading || settled.length === 0) return null;
@@ -121,7 +115,7 @@ function nextBill(months: MonthResult[], rate: number, kmPerDay: number): NextBi
   const fromBill = reading.bill !== null;
   const newKmPerDay = fromBill ? reading.billedKmPerDay : kmPerDay;
   return {
-    key: reading.key, label: reading.label, days: D,
+    key: reading.key, label: reading.label, name: reading.name, short: monthShort(reading.key, locale), days: D,
     oldKmPerDay, oldKm: oldKr / rate, oldKr,
     newKmPerDay, newKm: newKmPerDay * D, newKr: fromBill ? reading.bill! : Math.round(newKmPerDay * D * rate),
     fromBill,
@@ -134,7 +128,7 @@ function nextBill(months: MonthResult[], rate: number, kmPerDay: number): NextBi
  * until the next reading: km/day × days in month × rate. The reading month's bill is
  * the one the user entered, if any; part of it covers the end of this period.
  */
-function upcoming(input: Input, kmPerDay: number, periodKr: number): UpcomingBill[] {
+function upcoming(input: Input, kmPerDay: number, periodKr: number, locale: string): UpcomingBill[] {
   if (!isIsoDate(input.currDate)) return [];
   let [y, m] = input.currDate.split("-").map(Number);
   const out: UpcomingBill[] = [];
@@ -144,7 +138,7 @@ function upcoming(input: Input, kmPerDay: number, periodKr: number): UpcomingBil
     const entered = i === 0 ? input.bills[key] : undefined;
     const fromBill = entered !== undefined && Number.isFinite(entered);
     out.push({
-      key, label: `${MONTHS[m - 1]} ${y}`, days,
+      key, label: monthLabel(key, locale), name: monthName(key, locale), days,
       kr: fromBill ? entered : Math.round(kmPerDay * days * input.rate),
       fromBill, periodKr: i === 0 ? periodKr : 0,
     });
@@ -160,8 +154,8 @@ function upcoming(input: Input, kmPerDay: number, periodKr: number): UpcomingBil
  *    estimate is corrected: (true km/day − billed km/day) × days of that month in the window × rate.
  *  - The month of the new reading is billed after it, already at the new rate, so it isn't corrected.
  */
-export function compute(input: Input): Result {
-  const slices = monthSlices(input.prevDate, input.currDate);
+export function compute(input: Input, locale = "en"): Result {
+  const slices = monthSlices(input.prevDate, input.currDate, locale);
   const totalDays = daysBetween(input.prevDate, input.currDate);
   const totalKm = input.currKm - input.prevKm;
   const actualKmPerDay = totalKm / totalDays;
@@ -189,7 +183,7 @@ export function compute(input: Input): Result {
         ? Math.round((bill * s.days) / s.daysInMonth)
         : Math.round(actualKm * rate);
       return {
-        key: s.key, label: s.label, rangeLabel: s.rangeLabel, days: s.days, daysInMonth: s.daysInMonth,
+        key: s.key, label: s.label, name: s.name, rangeLabel: s.rangeLabel, days: s.days, daysInMonth: s.daysInMonth,
         kind: "new-rate", bill, billEstimated: bill === null,
         billedKmPerDay, billedKm: billedKmPerDay * s.days, actualKm,
         gapKm: 0, gapKr: 0, gapFromBill: false, calcGapKr: 0, portionKr,
@@ -205,7 +199,7 @@ export function compute(input: Input): Result {
     const gapFromBill = line !== undefined && Number.isFinite(line);
     const gapKm = gapFromBill ? line : calcGapKm;
     return {
-      key: s.key, label: s.label, rangeLabel: s.rangeLabel, days: s.days, daysInMonth: s.daysInMonth,
+      key: s.key, label: s.label, name: s.name, rangeLabel: s.rangeLabel, days: s.days, daysInMonth: s.daysInMonth,
       kind: "settled", bill: b, billEstimated: false,
       billedKmPerDay, billedKm, actualKm: gapFromBill ? billedKm + gapKm : actualKm,
       gapKm, gapKr: Math.round(gapKm * rate), gapFromBill, calcGapKr: Math.round(calcGapKm * rate),
@@ -237,8 +231,8 @@ export function compute(input: Input): Result {
     linesFromBill: fromBill === 0 ? "none" : fromBill === settled.length ? "all" : "some",
     newRateKr,
     roundingKr: totalCostKr - (estimatesKr + settlementKr + newRateKr),
-    upcomingBills: upcoming(input, kmPerDay, newRateKr),
-    nextBill: nextBill(months, rate, kmPerDay),
+    upcomingBills: upcoming(input, kmPerDay, newRateKr, locale),
+    nextBill: nextBill(months, rate, kmPerDay, locale),
     settlementCheck: input.settlement !== null
       ? { entered: input.settlement, diff: input.settlement - settlementKr }
       : null,

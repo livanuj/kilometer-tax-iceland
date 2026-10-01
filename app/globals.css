@@ -49,6 +49,15 @@ em { font-style: normal; color: var(--faint); font-weight: 400; font-size: 0.8em
 a, button { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
+/* ---------- language switcher ---------- */
+.langs { display: flex; justify-content: flex-end; gap: 2px; margin: -16px 0 20px; }
+.langs button {
+  background: none; border: 0; border-radius: 6px; padding: 4px 10px; font-size: 14px; color: var(--muted); cursor: pointer;
+}
+.langs button:hover { color: var(--ink); }
+.langs button[aria-pressed="true"] { color: var(--ink); font-weight: 600; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.langs.pending { opacity: 0.6; }
+
 /* ---------- form ---------- */
 .intro p { color: var(--muted); margin-top: 12px; max-width: 60ch; }
 .step { margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--line); }
@@ -264,6 +273,10 @@ input:hover { border-color: var(--faint); }
 .upcoming small { font-size: 13px; color: var(--muted); }
 .upcoming small.owe { color: var(--owe); } .upcoming small.back { color: var(--back); }
 .note { margin-top: 44px; padding-top: 20px; border-top: 1px solid var(--line); display: grid; gap: 10px; font-size: 15px; color: var(--muted); }
+.sources h2 { font-size: 15px; color: var(--ink); }
+.sources ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.sources a { color: var(--new); }
+.sources p { margin-top: 6px; color: var(--faint); font-size: 14px; }
 
 @media (max-width: 620px) {
   h1 { font-size: 36px; }

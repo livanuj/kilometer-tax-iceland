@@ -1,6 +1,6 @@
-# Kilometer tax, explained
+# Kilometer fee, explained
 
-A small Next.js app that shows how Iceland's kilometer tax (kílómetragjald) adds up between two odometer readings:
+A small Next.js app that shows how Iceland's kilometer fee (kílómetragjald) adds up between two odometer readings:
 what you drove, what your monthly estimates covered, and where the extra bill or refund comes from.
 
 ## How it works

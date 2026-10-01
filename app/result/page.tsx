@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getLocale } from "next-intl/server";
 import { compute, validate } from "@/lib/calc.ts";
 import { readInput } from "@/lib/storage.ts";
 import Results from "@/components/Results.tsx";
@@ -12,7 +13,7 @@ export default async function ResultPage() {
   return (
     <>
       <ScrollToTop />
-      <Results result={compute(input)} />
+      <Results result={compute(input, await getLocale())} />
     </>
   );
 }

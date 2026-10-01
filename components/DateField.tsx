@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { DayPicker, type Matcher } from "react-day-picker";
+import { enGB, is, pl } from "react-day-picker/locale";
 import "react-day-picker/style.css";
 import { DAY_MS, formatDate, isIsoDate, toUtc } from "@/lib/dates.ts";
+
+const PICKER_LOCALES = { is, en: enGB, pl };
 
 // The picker runs in UTC like the rest of the app, so a picked day is always the same "YYYY-MM-DD".
 const toDate = (iso: string) => new Date(toUtc(iso));
@@ -21,6 +25,8 @@ export default function DateField({ name, label, value, onChange, after, before 
   after?: string;   // only days after this date can be picked
   before?: string;  // only days before this date can be picked
 }) {
+  const locale = useLocale();
+  const t = useTranslations("date");
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -55,7 +61,7 @@ export default function DateField({ name, label, value, onChange, after, before 
         aria-labelledby={`${id}-label ${id}-value`}
         onClick={() => setOpen((o) => !o)}
       >
-        <span id={`${id}-value`}>{valid ? formatDate(value) : "Pick a date"}</span>
+        <span id={`${id}-value`}>{valid ? formatDate(value, locale) : t("pick")}</span>
         <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
           <rect x="3" y="4.5" width="14" height="12.5" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5" />
           <path d="M3 8.5h14M7 2.5v4M13 2.5v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -66,6 +72,7 @@ export default function DateField({ name, label, value, onChange, after, before 
         <div className="datepop" role="dialog" aria-label={label}>
           <DayPicker
             mode="single"
+            locale={PICKER_LOCALES[locale as keyof typeof PICKER_LOCALES] ?? is}
             timeZone="UTC"
             weekStartsOn={1}
             autoFocus

@@ -11,8 +11,9 @@ export type Input = {
 
 export type MonthResult = {
   key: string;
-  label: string;
-  rangeLabel: string;
+  label: string;                   // "June 2026", in the UI language
+  name: string;                    // "June", for use in a sentence
+  rangeLabel: string;              // "Jun" or "May 21 – 31"
   days: number;
   daysInMonth: number;
   kind: "settled" | "new-rate";
@@ -30,15 +31,25 @@ export type MonthResult = {
 
 // A settled month whose bill doesn't imply the same km/day as the others.
 // Warnings never block submitting; they only flag input that looks mistyped.
+// No text here: the UI words them in the chosen language from these fields.
 export type BillWarning = {
   monthKey: string;                // "YYYY-MM"
   kind: "shifted" | "settlement" | "mismatch";
-  message: string;
+  pair?: [string, string];         // shifted: the two month keys that look swapped
+  perDay?: number;                 // mismatch: this month's billed km/day
+  typical?: number;                // mismatch: the other months' km/day
+};
+
+// Why the input can't be calculated. The UI words it; monthKey names the month when relevant.
+export type ValidationError = {
+  code: "dates" | "order" | "km" | "kmLower" | "rate" | "bill";
+  monthKey?: string;
 };
 
 export type UpcomingBill = {
   key: string;                     // "YYYY-MM"
   label: string;                   // "September 2026"
+  name: string;                    // "September", for use in a sentence
   days: number;                    // days in that month
   kr: number;                      // the whole monthly bill
   fromBill: boolean;               // the user entered this bill; otherwise estimated
@@ -49,6 +60,8 @@ export type UpcomingBill = {
 export type NextBill = {
   key: string;
   label: string;                   // "September 2026"
+  name: string;                    // "September", for use in a sentence
+  short: string;                   // "Sep", as on the chart
   days: number;                    // days in that month
   oldKmPerDay: number;             // the estimate before the reading (median of settled months)
   oldKm: number;

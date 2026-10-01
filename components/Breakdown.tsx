@@ -1,12 +1,10 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import type { BillWarning, MonthResult, NextBill } from "@/lib/types.ts";
-
-const kr = (n: number) => `${n < 0 ? "−" : ""}${Math.abs(Math.round(n)).toLocaleString("de-DE")} kr`;
-const dec = (n: number, d = 2) => n.toFixed(d).replace(".", ",");
-// Chart labels are kr without the unit, to keep columns readable; the legend and detail panel say kr.
-const num = (n: number) => `${n < 0 ? "−" : ""}${Math.abs(Math.round(n)).toLocaleString("de-DE")}`;
+import { useTranslations } from "next-intl";
+import { dec, kr, num } from "@/lib/format.ts";
+import type { MonthResult, NextBill } from "@/lib/types.ts";
+// Chart labels use num() (kr without the unit) to keep columns readable; the detail panel says kr.
 
 // TOP leaves room above the tallest column for its total plus up to two segment labels.
 const W = 720, BASE = 250, TOP = 64, MIN_INSIDE = 16, LINE = 15;
@@ -18,8 +16,11 @@ type Part = { cls: string; km: number; label: string };
 // amber cap when it goes up, teal when it goes down. The part of that bill that belongs
 // to this period (e.g. Sep 1–10) is only mentioned in its detail panel.
 export default function Breakdown({ months: all, rate, kmPerDay, warnings, next }: {
-  months: MonthResult[]; rate: number; kmPerDay: number; warnings: BillWarning[]; next: NextBill | null;
+  months: MonthResult[]; rate: number; kmPerDay: number; next: NextBill | null;
+  warnings: { key: string; text: string }[]; // already worded in the UI language
 }) {
+  const t = useTranslations("breakdown");
+  const tc = useTranslations("common");
   const months = all.filter((m) => m.kind === "settled");
   const defaultIdx = Math.max(0, months.findIndex((m) => m.days === m.daysInMonth));
   const [sel, setSel] = useState(defaultIdx);
@@ -35,7 +36,7 @@ export default function Breakdown({ months: all, rate, kmPerDay, warnings, next 
   if (months.length === 0) return null; // both readings in the same month: nothing was billed by estimate
   const nextSelected = next !== null && sel === months.length;
   const m = months[Math.min(sel, months.length - 1)];
-  const warning = warnings.find((w) => w.monthKey === m.key);
+  const warning = warnings.find((w) => w.key === m.key);
 
   // One column: stacked parts, labels inside (or above when too short), total on top.
   const column = (i: number, key: string, parts: Part[], total: string, label: string, sub: string, aria: string,
@@ -97,8 +98,8 @@ export default function Breakdown({ months: all, rate, kmPerDay, warnings, next 
     return (
       <>
         <line x1={dividerX} x2={dividerX} y1={20} y2={BASE + 40} className="divider" />
-        {column(i, "next", parts, `${num(next.newKr)} kr`, next.label.slice(0, 3), next.fromBill ? "Next bill" : "Next bill (est.)",
-          `${next.label}, next bill: ${kr(next.newKr)} at the new average, ${kr(next.oldKr)} at the old one`,
+        {column(i, "next", parts, `${num(next.newKr)} kr`, next.short, t(next.fromBill ? "nextBill" : "nextBillEst"),
+          t("nextAria", { month: next.label, amount: kr(next.newKr), old: kr(next.oldKr) }),
           { next: true, overlay: lessOverlay })}
       </>
     );
@@ -106,14 +107,10 @@ export default function Breakdown({ months: all, rate, kmPerDay, warnings, next 
 
   return (
     <section className="breakdown">
-      <h2>Month by month</h2>
-      <p className="help">
-        Each column is a month billed by estimate before your latest reading: grey is what the estimate covered,
-        red is km it missed and green is km it overpaid. The last column is your next bill, estimated at the new
-        average and compared with the old one. Select a month to see the math.
-      </p>
+      <h2>{t("title")}</h2>
+      <p className="help">{t("help")}</p>
 
-      <svg viewBox={`0 0 ${W} 300`} className="chart" role="img" aria-label="Km per month: paid by estimate, and the difference charged or refunded">
+      <svg viewBox={`0 0 ${W} 300`} className="chart" role="img" aria-label={t("chartLabel")}>
         {grid.map((g) => (
           <g key={g}>
             <line x1={left} x2={W - 8} y1={BASE - h(g)} y2={BASE - h(g)} className={g === 0 ? "axis" : "gridline"} />
@@ -124,35 +121,38 @@ export default function Breakdown({ months: all, rate, kmPerDay, warnings, next 
           mo.gapKm >= 0
             ? [{ cls: "est", km: mo.billedKm, label: num(mo.portionKr) }, { cls: "owe", km: mo.gapKm, label: `+${num(mo.gapKr)}` }]
             : [{ cls: "est", km: mo.actualKm, label: num(mo.portionKr + mo.gapKr) }, { cls: "back", km: -mo.gapKm, label: num(mo.gapKr) }],
-          `${Math.round(mo.actualKm)} km`, mo.rangeLabel, `${mo.days} days`, `${mo.label}: ${Math.round(mo.actualKm)} km`))}
+          `${Math.round(mo.actualKm)} km`, mo.rangeLabel, tc("days", { n: mo.days }), t("colLabel", { month: mo.label, km: Math.round(mo.actualKm) })))}
         {nextColumn()}
       </svg>
 
       <div className="detail" aria-live="polite">
-        {nextSelected && next ? <NextDetail next={next} rate={rate} /> : (
+        {nextSelected && next ? <NextDetail next={next} rate={rate} t={t} /> : (
           <>
             <h3>{m.label}{m.days !== m.daysInMonth && <span> · {m.rangeLabel}</span>}</h3>
             <dl className="math">
-              <dt>Actually drove</dt>
+              <dt>{t("drove")}</dt>
               <dd>
                 {m.gapFromBill
                   ? <>{dec(m.billedKm, 1)} {m.gapKm >= 0 ? "+" : "−"} {dec(Math.abs(m.gapKm))} ≈ {dec(m.actualKm, 1)} km</>
                   : <>{m.days} × {dec(kmPerDay)} ≈ {dec(m.actualKm, 1)} km</>}
               </dd>
-              <dt>Already paid for</dt>
+              <dt>{t("paidFor")}</dt>
               <dd>{m.days} × {dec(m.billedKmPerDay)} ≈ {dec(m.billedKm, 1)} km</dd>
-              <dt className={m.gapKm >= 0 ? "owe" : "back"}>{m.gapKm >= 0 ? "Missing" : "Overpaid"}</dt>
+              <dt className={m.gapKm >= 0 ? "owe" : "back"}>{t(m.gapKm >= 0 ? "missing" : "overpaid")}</dt>
               <dd className={m.gapKm >= 0 ? "owe" : "back"}>
                 {dec(Math.abs(m.gapKm))} km × {dec(rate)} = {kr(Math.abs(m.gapKr))}
-                {m.gapFromBill && <small> · from your bill</small>}
+                {m.gapFromBill && <small> · {t("fromBill")}</small>}
               </dd>
             </dl>
-            {warning && <p className="warn">{warning.message}</p>}
+            {warning && <p className="warn">{warning.text}</p>}
             <p className="why">
-              {m.gapFromBill && m.gapKr !== m.calcGapKr && <>Worked out from the readings, this month would be {kr(m.calcGapKr)}. </>}
-              Your {m.label} bill of {kr(m.bill ?? 0)} assumed {dec(m.billedKmPerDay)} km a day
-              {m.days !== m.daysInMonth && <>; {m.days} of its {m.daysInMonth} days belong to this period, about {kr(m.portionKr)}</>}.
-              {" "}{m.gapKm >= 0 ? "The missing km are added to your extra bill." : "The overpaid km come back as a refund."}
+              {[
+                m.gapFromBill && m.gapKr !== m.calcGapKr ? t("calcWouldBe", { amount: kr(m.calcGapKr) }) : "",
+                m.days !== m.daysInMonth
+                  ? t("assumedPart", { month: m.name, amount: kr(m.bill ?? 0), perDay: dec(m.billedKmPerDay), days: m.days, total: m.daysInMonth, portion: kr(m.portionKr) })
+                  : t("assumed", { month: m.name, amount: kr(m.bill ?? 0), perDay: dec(m.billedKmPerDay) }),
+                t(m.gapKm >= 0 ? "missingWhy" : "overpaidWhy"),
+              ].filter(Boolean).join(" ")}
             </p>
           </>
         )}
@@ -161,29 +161,27 @@ export default function Breakdown({ months: all, rate, kmPerDay, warnings, next 
   );
 }
 
-function NextDetail({ next, rate }: { next: NextBill; rate: number }) {
+function NextDetail({ next, rate, t }: { next: NextBill; rate: number; t: ReturnType<typeof useTranslations<"breakdown">> }) {
   const diff = next.newKr - next.oldKr;
   const up = diff >= 0;
-  const name = next.label.split(" ")[0];
+  const why = { old: dec(next.oldKmPerDay), new: dec(next.newKmPerDay), month: next.name, diff: kr(Math.abs(diff)), days: next.days };
   return (
     <>
-      <h3>{next.label}<span> · next bill{next.fromBill ? "" : ", estimated"}</span></h3>
+      <h3>{next.label}<span> · {t(next.fromBill ? "nextHeading" : "nextHeadingEst")}</span></h3>
       <dl className="math">
-        <dt>Old estimate</dt>
+        <dt>{t("oldEstimate")}</dt>
         <dd>{next.days} × {dec(next.oldKmPerDay)} ≈ {dec(next.oldKm, 1)} km = {kr(next.oldKr)}</dd>
-        <dt>New average</dt>
+        <dt>{t("newAverage")}</dt>
         <dd>
           {next.days} × {dec(next.newKmPerDay)} ≈ {dec(next.newKm, 1)} km = {kr(next.newKr)}
-          <small> · {next.fromBill ? "as billed" : "estimate"}</small>
+          <small> · {t(next.fromBill ? "asBilled" : "estimate")}</small>
         </dd>
-        <dt className={up ? "more" : "less"}>{up ? "Higher by" : "Lower by"}</dt>
+        <dt className={up ? "more" : "less"}>{t(up ? "higherBy" : "lowerBy")}</dt>
         <dd className={up ? "more" : "less"}>{kr(Math.abs(diff))}</dd>
       </dl>
       <p className="why">
-        Your average went {up ? "up" : "down"} from {dec(next.oldKmPerDay)} to {dec(next.newKmPerDay)} km a day,
-        so your {name} bill is {kr(Math.abs(diff))} {up ? "higher" : "lower"} than your earlier {next.days}-day bills.
-        {" "}{next.periodRange} ({Math.round(next.periodKm)} km, {kr(next.periodKr)} of this bill) is the end of this period;
-        the rest is driving after it. At {dec(rate)} kr/km, every month is billed like this until your next reading.
+        {t(up ? "nextWhyUp" : "nextWhyDown", why)}{" "}
+        {t("nextPeriod", { span: next.periodRange, km: Math.round(next.periodKm), amount: kr(next.periodKr), rate: dec(rate) })}
       </p>
     </>
   );

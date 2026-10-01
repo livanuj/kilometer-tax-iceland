@@ -43,14 +43,14 @@ if (r0.averageSource !== "readings" || Math.abs(r0.settlementCheck!.diff) > 30 |
 const bad = { ...SAMPLE, govLines: {}, bills: { "2026-05": 2279, "2026-06": 2356, "2026-07": 2356, "2026-08": 2721 } };
 const w = checkBills(bad);
 console.log("\nbad bills:");
-w.forEach((x) => console.log(`${x.monthKey} ${x.kind.padEnd(10)} ${x.message}`));
+w.forEach((x) => console.log(`${x.monthKey} ${x.kind.padEnd(10)} ${JSON.stringify({ pair: x.pair, perDay: x.perDay, typical: x.typical })}`));
 const has = (key: string, kind: string) => w.some((x) => x.monthKey === key && x.kind === kind);
 if (!has("2026-05", "shifted") || !has("2026-06", "shifted") || !has("2026-08", "settlement") || w.length !== 3 ||
     validate(bad) !== null || compute(bad).warnings.length !== 3) { console.error("FAIL"); process.exit(1); }
 
 // Same August amount without a matching extra bill: a plain mismatch.
 const odd = checkBills({ ...bad, settlement: null }).find((x) => x.monthKey === "2026-08");
-console.log(odd?.message);
+console.log("August alone:", odd?.kind, odd?.perDay?.toFixed(1), "vs", odd?.typical?.toFixed(1));
 if (odd?.kind !== "mismatch") { console.error("FAIL"); process.exit(1); }
 // Real earlier period: previous reading on Mar 30 came after the March bill, so March (3.572) is still at the
 // average before it, and April (3.725 = 30 × 17,87) at the new one. Both correct: no warnings.

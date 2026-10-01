@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "next": "15.5.26",
+    "next-intl": "^4.14.8",
     "react": "19.3.0",
     "react-day-picker": "^10.0.2",
     "react-dom": "19.3.0",

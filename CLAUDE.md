@@ -2,13 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-# Kilometer tax, explained
+# Kilometer fee, explained
 
 Handoff notes for continuing this project in Claude Code. Read this first; it explains the domain, the formula, every design decision, and what's still open.
 
 ## What this app is
 
-A single-page Next.js app that explains Iceland's kilometer tax (*kílómetragjald*) between two odometer readings. The user enters:
+A single-page Next.js app that explains Iceland's kilometer fee (*kílómetragjald*) between two odometer readings. The user enters:
 
 1. Previous and latest odometer reading (date + km) as registered on Ísland.is
 2. Their rate (kr/km), chosen from presets or typed
@@ -21,7 +21,7 @@ Target: deploy on Vercel. **No separate backend** is a hard requirement from the
 
 ## Domain: how the government bills
 
-Source: island.is/kilometragjald and skatturinn.is/kilometragjald (2026 rules).
+Source: island.is/kilometragjald and skatturinn.is/kilometragjald (2026 rules). The results footer links these as "Sources" (`SOURCES` in `Results.tsx`). The main one is Skatturinn's article "Kílómetragjald – fyrirkomulag og leiðréttingar". It states the method: the average per day comes from the last two readings, the monthly fee is the average × the days in the month, and the next reading settles the earlier months.
 
 - Since Jan 1, 2026, all vehicles pay per km, billed **monthly**. The rate depends on vehicle weight: 6,95 kr/km for cars/SUVs up to 3.5 t, 4,15 kr/km for motorcycles up to 400 kg, and stepped higher rates for heavier vehicles.
 - It works like a utility bill. Each month you pay an **estimate** based on your average driving between your last two registered readings.
@@ -168,6 +168,11 @@ Breakdown (client) — only handles which month is selected
 | `lib/types.ts` | `Input`, `MonthResult`, `Result`. |
 | `lib/sample.ts` | The real example above. |
 | `lib/calc.test.ts` | Script test against the real bill. `npm test`. |
+| `lib/format.ts` | `kr()`, `km()`, `dec()`, `num()`: Icelandic-style numbers, shared by all components. |
+| `i18n/locales.ts`, `i18n/request.ts` | Languages (`is` default, `en`, `pl`), the `NEXT_LOCALE` cookie, and next-intl's request config. |
+| `messages/{is,en,pl}.json` | All UI text. `en.json` is the source; keep the three key sets identical. |
+| `components/LanguageSwitcher.tsx` | Client. Íslenska / English / Polski buttons at the top of every page (in `layout.tsx`). |
+| `components/wording.ts` | Words `BillWarning` and `ValidationError` codes in the UI language (used by the form and the results). |
 
 Test expectations (`lib/calc.test.ts`):
 - `SAMPLE` (with month lines): 113 days, `linesFromBill` `"all"`, months exactly 289/792/820/820 kr, settlement diff **0**, no warnings.
@@ -194,6 +199,16 @@ The owner found the blue segment and column confusing ("1.026 kr, which I don't 
 With both readings in the same month there are no settled months, and the chart isn't rendered.
 
 `Result.upcomingBills` (from `upcoming()` in `calc.ts`) lists the reading month and the two after it: `kmPerDay × days in month × rate`, or the entered bill for the reading month. The reading month carries `periodKr` (= `newRateKr`), but the card doesn't show it (owner: show it only in the chart's detail panel). The first card adds "Plus the extra bill of X" (or "Minus the refund") on the assumption that the settlement comes with that month's bill. This section replaces the old footer sentence based on `typicalNextBillKr`, which was removed.
+
+## Languages (next-intl)
+
+Icelandic (default), English and Polish, decided by the owner:
+- **No URL prefix.** The language lives in the `NEXT_LOCALE` cookie (1 year), set by the `setLocale` Server Action. `/edit` and `/result` stay the same in every language. No browser detection: a first visit is Icelandic.
+- **Numbers stay Icelandic-style in every language** (11.593 kr, 14,76) so they match the bills. `lib/format.ts` uses `de-DE` for that; don't switch it to the UI locale.
+- **Dates and month names follow the language** through Intl: `monthLabel`, `monthName`, `monthShort`, `dayOfMonth`, `formatDate`, `formatSpan` in `lib/dates.ts`. They take a `locale` that defaults to `"en"`, so `npm test` output is English. `compute(input, locale)` and `monthSlices(…, locale)` fill `label` / `name` / `rangeLabel` in that language. The date picker uses react-day-picker's `is` / `enGB` / `pl` locales.
+- **`lib/` returns codes, not sentences.** `validate()` returns `{ code, monthKey? }` and `checkBills()` returns `BillWarning` with `pair` / `perDay` / `typical`. `components/wording.ts` words them.
+- **Server components** use `getTranslations` / `getLocale`; client components use `useTranslations` / `useLocale`. Rich text (links, bold, Icelandic menu names) uses `t.rich` with `link`, `b`, `is` tags.
+- **Translations are drafts.** Icelandic uses Skatturinn's terms (*kílómetrastaða*, *meðalakstur*, *áætlun*, *uppgjör*, *endurgreiðsla*, *greiðsluseðill*), with "uppgjör" for the extra bill. Icelandic and Polish still need a native speaker's review before launch.
 
 ## Conventions and decisions (keep these)
 
@@ -248,6 +263,7 @@ Not verified yet:
 - Live warnings in the form while typing. They recompute on every keystroke, so a half-typed amount (e.g. "23") shows a mismatch until it's finished; consider showing them only after blur if that's noisy.
 - Paid-bar segments hide their text label below 150 px wide (CSS container query) and keep the amount. Checked at 960 and 375 px.
 - "Charged around Sep 29" assumes the extra bill arrives with the reading month's bill, near month end, same as the "Bill paid around" hint. Confirm against a real statement.
+- Monthly bills: the owner confirmed the bank shows the payment as a claim from *Ríkissjóðsinnheimtur*. Skatturinn says the payment slip goes to the online bank and the Ísland.is mailbox, and one bill covers all vehicles on a kennitala. So the bank amount is a total, and the per-vehicle amount is on the bill in Pósthólf.
 - Help guides (`Guides.tsx`): the links (`island.is/minarsidur/eignir/okutaeki/min-okutaeki`, `…/skra-kilometrastodu`, `island.is/minarsidur/postholf`) and rules come from island.is/en/kilometer-fee and Skatturinn's news on payment slips. No official step-by-step guide with screenshots was found, and nobody has logged in to confirm the exact menu labels ("Mínar síður → Eignir → Ökutæki", "kílómetrastaða"). Check them against the live site.
 - Whether the 2% tolerance holds for real bills from other users (e.g. a reading that doesn't count toward the average, or a rate change mid-period, would legitimately change the monthly estimate).
 
@@ -264,7 +280,6 @@ Edge cases to test and handle:
 Product ideas raised in the conversation:
 - "What if I register today?" preview: enter today's odometer and estimate the coming extra bill or refund.
 - Support more than two readings: a full history with each settlement shown in sequence, including refunds like the April example.
-- Icelandic UI (`is` locale), since most users are Icelandic.
 - Rate presets for 3.5–10 t vehicles once the per-km table is confirmed on island.is (only the ≥10 t table was found).
 - A shareable/printable summary. Currently everything lives in the user's cookie only.
 - Swap the Google Fonts `<link>` for `next/font/google` for self-hosting (the `<link>` was used only because the build sandbox had no network access to Google Fonts).
